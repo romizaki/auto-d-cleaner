@@ -10,6 +10,7 @@ export type WorkerResponse =
       rows: CSVRow[];
       columns: ColumnSchema[];
       healthScore: HealthScore;
+      warnings: string[];
     }
   | {
       type: "CLEAN_PROGRESS";

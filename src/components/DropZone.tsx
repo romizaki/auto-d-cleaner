@@ -2,6 +2,9 @@
 
 import { useCallback, useState } from "react";
 
+const MAX_FILE_SIZE_MB = 50;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+
 interface DropZoneProps {
   onFile: (file: File) => void;
   disabled?: boolean;
@@ -9,6 +12,20 @@ interface DropZoneProps {
 
 export function DropZone({ onFile, disabled }: DropZoneProps) {
   const [isDragging, setIsDragging] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const validateAndAccept = useCallback((file: File) => {
+    setError(null);
+    if (!file.name.toLowerCase().endsWith(".csv")) {
+      setError("Please select a .csv file");
+      return;
+    }
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      setError(`File is too large. Maximum size is ${MAX_FILE_SIZE_MB}MB.`);
+      return;
+    }
+    onFile(file);
+  }, [onFile]);
 
   const handleDrag = useCallback(
     (e: React.DragEvent) => {
@@ -32,23 +49,20 @@ export function DropZone({ onFile, disabled }: DropZoneProps) {
       if (disabled) return;
       const files = e.dataTransfer.files;
       if (files?.[0]) {
-        const file = files[0];
-        if (file.name.endsWith(".csv")) {
-          onFile(file);
-        }
+        validateAndAccept(files[0]);
       }
     },
-    [onFile, disabled]
+    [validateAndAccept, disabled]
   );
 
   const handleFileInput = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files;
       if (files?.[0]) {
-        onFile(files[0]);
+        validateAndAccept(files[0]);
       }
     },
-    [onFile]
+    [validateAndAccept]
   );
 
   return (
@@ -119,6 +133,10 @@ export function DropZone({ onFile, disabled }: DropZoneProps) {
         <p className="text-xs text-slate-500">
           Supports CSV files up to 50MB
         </p>
+
+        {error && (
+          <p className="text-xs text-red-400">{error}</p>
+        )}
       </div>
     </div>
   );

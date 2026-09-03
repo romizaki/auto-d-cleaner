@@ -23,29 +23,31 @@ export function validateEmails(
     };
   }
 
-  const cleaned = rows.filter((row) => {
+  let invalidCount = 0;
+
+  const cleaned = rows.map((row) => {
+    const newRow = { ...row };
     for (const col of emailColumns) {
       const val = (row[col.name] || "").trim();
       if (val.length > 0 && !EMAIL_REGEX.test(val)) {
-        return false;
+        newRow[col.name] = "";
+        invalidCount++;
       }
     }
-    return true;
+    return newRow;
   });
-
-  const removed = rows.length - cleaned.length;
 
   return {
     cleaned,
     audit: {
       rule: "validate_emails",
       label: "Validate Emails",
-      description: `Removed ${removed} rows with invalid emails`,
-      rowsAffected: removed,
+      description: `Cleared ${invalidCount} invalid email values`,
+      rowsAffected: invalidCount,
       details:
-        removed > 0
+        invalidCount > 0
           ? emailColumns.map(
-              (c) => `Validated ${c.name}: removed ${removed} invalid entries`
+              (c) => `Validated ${c.name}: cleared ${invalidCount} invalid entries`
             )
           : [],
     },

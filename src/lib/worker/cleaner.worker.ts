@@ -55,7 +55,11 @@ function extractColumns(headers: string[], data: CSVRow[]): ColumnSchema[] {
   });
 }
 
-function parseCSV(csvText: string): { data: CSVRow[]; columns: ColumnSchema[] } {
+function parseCSV(csvText: string): {
+  data: CSVRow[];
+  columns: ColumnSchema[];
+  warnings: string[];
+} {
   const results = Papa.parse<CSVRow>(csvText, {
     header: true,
     skipEmptyLines: true,
@@ -65,7 +69,16 @@ function parseCSV(csvText: string): { data: CSVRow[]; columns: ColumnSchema[] } 
   const data = results.data as CSVRow[];
   const columns = extractColumns(headers, data);
 
-  return { data, columns };
+  const warnings = results.errors.slice(0, 10).map((err) => {
+    const loc = err.row !== undefined ? ` (row ${err.row + 1})` : "";
+    return `${err.message}${loc}`;
+  });
+
+  if (headers.length === 0) {
+    warnings.push("No columns detected. The file may be empty or not a valid CSV.");
+  }
+
+  return { data, columns, warnings };
 }
 
 interface RuleStep {
@@ -113,9 +126,9 @@ self.onmessage = (e: MessageEvent<WorkerRequest>) => {
   const req = e.data;
   try {
     if (req.type === "PARSE") {
-      const { data, columns } = parseCSV(req.csvText);
+      const { data, columns, warnings } = parseCSV(req.csvText);
       const healthScore: HealthScore = calculateHealthScore(data, columns);
-      post({ type: "PARSE_RESULT", rows: data, columns, healthScore });
+      post({ type: "PARSE_RESULT", rows: data, columns, healthScore, warnings });
     } else if (req.type === "CLEAN") {
       const { cleanedData, auditLog } = runCleaningPipeline(
         req.data,

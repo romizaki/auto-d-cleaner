@@ -70,6 +70,17 @@ function CleanerApp() {
           </div>
         )}
 
+        {state.warnings.length > 0 && state.stage !== "error" && (
+          <div className="mb-6 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-sm animate-fade-in">
+            <p className="font-medium mb-1">CSV parsing warnings:</p>
+            <ul className="list-disc list-inside space-y-0.5">
+              {state.warnings.map((w, i) => (
+                <li key={i}>{w}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {state.stage === "idle" && (
           <div className="space-y-6 animate-fade-in">
             <div className="text-center space-y-2">

@@ -13,6 +13,7 @@ type Action =
   | { type: "SET_AUDIT_LOG"; payload: CleanerState["auditLog"] }
   | { type: "SET_PROGRESS"; payload: CleanerState["progress"] }
   | { type: "SET_ERROR"; payload: string }
+  | { type: "SET_WARNINGS"; payload: string[] }
   | { type: "RESET" };
 
 const initialState: CleanerState = {
@@ -25,6 +26,7 @@ const initialState: CleanerState = {
   auditLog: [],
   progress: null,
   error: null,
+  warnings: [],
 };
 
 function reducer(state: CleanerState, action: Action): CleanerState {
@@ -47,6 +49,8 @@ function reducer(state: CleanerState, action: Action): CleanerState {
       return { ...state, progress: action.payload };
     case "SET_ERROR":
       return { ...state, error: action.payload, stage: "error", progress: null };
+    case "SET_WARNINGS":
+      return { ...state, warnings: action.payload };
     case "RESET":
       return initialState;
     default:

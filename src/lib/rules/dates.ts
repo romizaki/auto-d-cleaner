@@ -1,20 +1,37 @@
 import { CSVRow, AuditEntry, ColumnSchema } from "@/types";
 
 const DATE_FORMATS = [
-  { regex: /^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})$/, parser: (m: RegExpMatchArray) => `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}` },
-  { regex: /^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/, parser: (m: RegExpMatchArray) => `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}` },
-  { regex: /^(\d{1,2})[-\/](\d{1,2})[-\/](\d{2})$/, parser: (m: RegExpMatchArray) => `20${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}` },
+  { regex: /^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})$/, yearIndex: 0, monthIndex: 1, dayIndex: 2, twoDigitYear: false },
+  { regex: /^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/, yearIndex: 2, monthIndex: 0, dayIndex: 1, twoDigitYear: false },
+  { regex: /^(\d{1,2})[-\/](\d{1,2})[-\/](\d{2})$/, yearIndex: 2, monthIndex: 0, dayIndex: 1, twoDigitYear: true },
 ];
+
+function daysInMonth(year: number, month: number): number {
+  if (month === 2) {
+    const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+    return leap ? 29 : 28;
+  }
+  return [4, 6, 9, 11].includes(month) ? 30 : 31;
+}
+
+function isValidDate(year: number, month: number, day: number): boolean {
+  if (year < 1 || year > 9999) return false;
+  if (month < 1 || month > 12) return false;
+  if (day < 1 || day > daysInMonth(year, month)) return false;
+  return true;
+}
 
 function normalizeDate(val: string): string {
   const trimmed = val.trim();
   for (const fmt of DATE_FORMATS) {
     const match = trimmed.match(fmt.regex);
     if (match) {
-      const iso = fmt.parser(match);
-      const d = new Date(iso);
-      if (!isNaN(d.getTime())) {
-        return iso;
+      let year = parseInt(match[fmt.yearIndex], 10);
+      const month = parseInt(match[fmt.monthIndex], 10);
+      const day = parseInt(match[fmt.dayIndex], 10);
+      if (fmt.twoDigitYear) year += 2000;
+      if (isValidDate(year, month, day)) {
+        return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
       }
     }
   }

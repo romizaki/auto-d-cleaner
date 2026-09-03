@@ -73,4 +73,5 @@ export interface CleanerState {
   auditLog: AuditEntry[];
   progress: CleanProgress | null;
   error: string | null;
+  warnings: string[];
 }

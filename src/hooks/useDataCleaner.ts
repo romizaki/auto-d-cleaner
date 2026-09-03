@@ -22,6 +22,7 @@ export function useDataCleaner() {
         dispatch({ type: "SET_RAW_DATA", payload: msg.rows });
         dispatch({ type: "SET_COLUMNS", payload: msg.columns });
         dispatch({ type: "SET_HEALTH_SCORE", payload: msg.healthScore });
+        dispatch({ type: "SET_WARNINGS", payload: msg.warnings });
         dispatch({ type: "SET_STAGE", payload: "ready" });
       } else if (msg.type === "CLEAN_PROGRESS") {
         dispatch({
@@ -66,6 +67,7 @@ export function useDataCleaner() {
       dispatch({ type: "SET_STAGE", payload: "uploaded" });
       dispatch({ type: "SET_FILE_NAME", payload: file.name });
       dispatch({ type: "SET_ERROR", payload: "" });
+      dispatch({ type: "SET_WARNINGS", payload: [] });
 
       dispatch({ type: "SET_STAGE", payload: "analyzing" });
       const csvText = await file.text();
@@ -82,6 +84,7 @@ export function useDataCleaner() {
       dispatch({ type: "SET_STAGE", payload: "uploaded" });
       dispatch({ type: "SET_FILE_NAME", payload: "sample-data.csv" });
       dispatch({ type: "SET_ERROR", payload: "" });
+      dispatch({ type: "SET_WARNINGS", payload: [] });
 
       dispatch({ type: "SET_STAGE", payload: "analyzing" });
       const response = await fetch("/sample-data.csv");
@@ -122,7 +125,10 @@ export function useDataCleaner() {
         headers
           .map((h) => {
             const val = row[h] || "";
-            return val.includes(",") || val.includes('"')
+            return val.includes(",") ||
+              val.includes('"') ||
+              val.includes("\n") ||
+              val.includes("\r")
               ? `"${val.replace(/"/g, '""')}"`
               : val;
           })
