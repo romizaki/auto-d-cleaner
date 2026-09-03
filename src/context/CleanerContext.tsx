@@ -11,6 +11,7 @@ type Action =
   | { type: "SET_HEALTH_SCORE"; payload: CleanerState["healthScore"] }
   | { type: "SET_CLEANED_DATA"; payload: CleanerState["cleanedData"] }
   | { type: "SET_AUDIT_LOG"; payload: CleanerState["auditLog"] }
+  | { type: "SET_PROGRESS"; payload: CleanerState["progress"] }
   | { type: "SET_ERROR"; payload: string }
   | { type: "RESET" };
 
@@ -22,6 +23,7 @@ const initialState: CleanerState = {
   columns: [],
   healthScore: null,
   auditLog: [],
+  progress: null,
   error: null,
 };
 
@@ -41,8 +43,10 @@ function reducer(state: CleanerState, action: Action): CleanerState {
       return { ...state, cleanedData: action.payload };
     case "SET_AUDIT_LOG":
       return { ...state, auditLog: action.payload };
+    case "SET_PROGRESS":
+      return { ...state, progress: action.payload };
     case "SET_ERROR":
-      return { ...state, error: action.payload, stage: "error" };
+      return { ...state, error: action.payload, stage: "error", progress: null };
     case "RESET":
       return initialState;
     default:

@@ -1,26 +1,53 @@
 import { CSVRow, AuditEntry } from "@/types";
 
-function levenshtein(a: string, b: string): number {
+function bandedLevenshtein(a: string, b: string, maxDist: number): number {
   const m = a.length;
   const n = b.length;
-  const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
-  for (let i = 0; i <= m; i++) dp[i][0] = i;
-  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  if (Math.abs(m - n) > maxDist) return maxDist + 1;
+  if (m === 0) return n;
+  if (n === 0) return m;
+
+  let prev = new Uint32Array(n + 1);
+  let curr = new Uint32Array(n + 1);
+  for (let j = 0; j <= n; j++) prev[j] = j;
+
   for (let i = 1; i <= m; i++) {
-    for (let j = 1; j <= n; j++) {
-      dp[i][j] =
-        a[i - 1] === b[j - 1]
-          ? dp[i - 1][j - 1]
-          : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+    curr.fill(maxDist + 1);
+    curr[0] = i;
+    const rowMin = Math.max(1, i - maxDist);
+    const rowMax = Math.min(n, i + maxDist);
+    let rowLow = maxDist + 1;
+
+    for (let j = rowMin; j <= rowMax; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      let best = maxDist + 1;
+      const up = prev[j] + 1;
+      const left = j > 0 ? curr[j - 1] + 1 : maxDist + 1;
+      const diag = prev[j - 1] + cost;
+      if (up < best) best = up;
+      if (left < best) best = left;
+      if (diag < best) best = diag;
+      curr[j] = best;
+      if (best < rowLow) rowLow = best;
     }
+
+    if (rowLow > maxDist) return maxDist + 1;
+
+    const tmp = prev;
+    prev = curr;
+    curr = tmp;
   }
-  return dp[m][n];
+
+  return prev[n];
 }
 
-function similarity(a: string, b: string): number {
+function similarity(a: string, b: string, threshold: number): boolean {
   const maxLen = Math.max(a.length, b.length);
-  if (maxLen === 0) return 1;
-  return 1 - levenshtein(a.toLowerCase(), b.toLowerCase()) / maxLen;
+  if (maxLen === 0) return true;
+  if (Math.abs(a.length - b.length) > maxLen * (1 - threshold)) return false;
+  const maxDist = Math.floor(maxLen * (1 - threshold));
+  const dist = bandedLevenshtein(a, b, maxDist);
+  return dist <= maxDist;
 }
 
 export function removeDuplicates(rows: CSVRow[]): {
@@ -45,21 +72,44 @@ export function removeDuplicates(rows: CSVRow[]): {
   const fuzzyRemoved: CSVRow[] = [];
   const fuzzyIndices = new Set<number>();
 
-  for (let i = 0; i < remaining.length; i++) {
-    if (fuzzyIndices.has(i)) continue;
-    const rowStr = JSON.stringify(remaining[i]).toLowerCase();
-    for (let j = i + 1; j < remaining.length; j++) {
-      if (fuzzyIndices.has(j)) continue;
-      const compStr = JSON.stringify(remaining[j]).toLowerCase();
-      if (similarity(rowStr, compStr) > 0.85) {
-        fuzzyRemoved.push(remaining[j]);
-        fuzzyIndices.add(j);
+  const threshold = remaining.length > 5000 ? 0.9 : 0.85;
+
+  const MAX_FUZZY_ROWS = 10000;
+  const doFuzzy = remaining.length <= MAX_FUZZY_ROWS;
+
+  if (doFuzzy) {
+    const rowStrCache = new Array<string>(remaining.length);
+    for (let i = 0; i < remaining.length; i++) {
+      rowStrCache[i] = JSON.stringify(remaining[i]).toLowerCase();
+    }
+
+    for (let i = 0; i < remaining.length; i++) {
+      if (fuzzyIndices.has(i)) continue;
+      const rowStr = rowStrCache[i];
+      for (let j = i + 1; j < remaining.length; j++) {
+        if (fuzzyIndices.has(j)) continue;
+        const compStr = rowStrCache[j];
+        if (similarity(rowStr, compStr, threshold)) {
+          fuzzyRemoved.push(remaining[j]);
+          fuzzyIndices.add(j);
+        }
       }
     }
   }
 
   const cleaned = remaining.filter((_, i) => !fuzzyIndices.has(i));
   const totalRemoved = exactRemoved.length + fuzzyRemoved.length;
+
+  const detailLines = [`${exactRemoved.length} exact duplicates removed`];
+  if (doFuzzy) {
+    detailLines.push(
+      `${fuzzyRemoved.length} near-duplicates removed (similarity > ${(threshold * 100).toFixed(0)}%)`
+    );
+  } else {
+    detailLines.push(
+      `Fuzzy dedup skipped for ${remaining.length} rows (over ${MAX_FUZZY_ROWS.toLocaleString()} rows, exact-only)`
+    );
+  }
 
   return {
     cleaned,
@@ -68,10 +118,7 @@ export function removeDuplicates(rows: CSVRow[]): {
       label: "Removed Duplicates",
       description: `Removed ${exactRemoved.length} exact and ${fuzzyRemoved.length} fuzzy duplicate rows`,
       rowsAffected: totalRemoved,
-      details: [
-        `${exactRemoved.length} exact duplicates removed`,
-        `${fuzzyRemoved.length} near-duplicates removed (similarity > 85%)`,
-      ],
+      details: detailLines,
     },
   };
 }

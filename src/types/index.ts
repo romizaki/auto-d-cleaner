@@ -56,6 +56,13 @@ export type AppStage =
   | "done"
   | "error";
 
+export interface CleanProgress {
+  rule: RuleName;
+  label: string;
+  rowsProcessed: number;
+  totalRows: number;
+}
+
 export interface CleanerState {
   stage: AppStage;
   fileName: string;
@@ -64,5 +71,6 @@ export interface CleanerState {
   columns: ColumnSchema[];
   healthScore: HealthScore | null;
   auditLog: AuditEntry[];
+  progress: CleanProgress | null;
   error: string | null;
 }

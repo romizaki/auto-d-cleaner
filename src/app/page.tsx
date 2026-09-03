@@ -7,7 +7,7 @@ import { DataHealthScore } from "@/components/DataHealthScore";
 import { DataTable } from "@/components/DataTable";
 import { BeforeAfterSplit } from "@/components/BeforeAfterSplit";
 import { AuditReport } from "@/components/AuditReport";
-import { SkeletonLoader } from "@/components/SkeletonLoader";
+import { CleaningProgress } from "@/components/CleaningProgress";
 import { CheckmarkAnimation } from "@/components/CheckmarkAnimation";
 import { ExportButton } from "@/components/ExportButton";
 import { SampleDataButton } from "@/components/SampleDataButton";
@@ -50,6 +50,14 @@ function CleanerApp() {
       </header>
 
       <main className="max-w-6xl mx-auto px-6 py-8">
+        {isProcessing && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm">
+            <div className="w-full max-w-xl px-6">
+              <CleaningProgress progress={state.progress} totalRows={state.rawData.length} />
+            </div>
+          </div>
+        )}
+
         {state.error && (
           <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm animate-fade-in">
             {state.error}
@@ -69,9 +77,9 @@ function CleanerApp() {
                 Clean your data in seconds
               </h2>
               <p className="text-slate-400 max-w-lg mx-auto">
-                Upload a CSV file, let our AI-powered engine detect issues and
-                clean your data automatically. No data is ever stored on our
-                servers.
+                Upload a CSV file, let our cleaning engine detect issues and
+                normalize your data automatically. Everything runs locally in
+                your browser. No data is ever stored on our servers.
               </p>
             </div>
 
@@ -85,9 +93,7 @@ function CleanerApp() {
         )}
 
         {state.stage === "analyzing" && (
-          <div className="space-y-6">
-            <SkeletonLoader />
-          </div>
+          <div className="space-y-6" />
         )}
 
         {state.stage === "ready" && (
@@ -107,13 +113,15 @@ function CleanerApp() {
               <div className="flex gap-3">
                 <button
                   onClick={reset}
-                  className="px-4 py-2 rounded-xl text-sm text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+                  disabled={isProcessing}
+                  className="px-4 py-2 rounded-xl text-sm text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Start Over
                 </button>
                 <button
                   onClick={cleanData}
-                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-500 text-white font-medium text-sm hover:bg-emerald-600 transition-colors shadow-lg shadow-emerald-500/20"
+                  disabled={isProcessing}
+                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-500 text-white font-medium text-sm hover:bg-emerald-600 transition-colors shadow-lg shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -159,7 +167,7 @@ function CleanerApp() {
 
         {state.stage === "cleaning" && (
           <div className="space-y-6">
-            <SkeletonLoader />
+            <CleaningProgress progress={state.progress} totalRows={state.rawData.length} />
           </div>
         )}
 
@@ -181,7 +189,8 @@ function CleanerApp() {
               </div>
               <button
                 onClick={reset}
-                className="px-4 py-2 rounded-xl text-sm text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+                disabled={isProcessing}
+                className="px-4 py-2 rounded-xl text-sm text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Clean Another File
               </button>
@@ -199,6 +208,7 @@ function CleanerApp() {
                 exportCSV(state.cleanedData, `cleaned-${state.fileName}`)
               }
               onExportAudit={exportAuditReport}
+              disabled={isProcessing}
             />
           </div>
         )}
