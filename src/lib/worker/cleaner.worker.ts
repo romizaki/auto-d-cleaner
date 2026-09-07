@@ -107,13 +107,15 @@ function runCleaningPipeline(
   ];
 
   const totalRows = current.length;
+  let rowsProcessed = 0;
   for (const step of steps) {
-    onProgress(step.name, step.label, totalRows - current.length, totalRows);
+    onProgress(step.name, step.label, rowsProcessed, totalRows);
     const result = step.run(current, columns);
+    rowsProcessed += current.length;
     current = result.cleaned;
     auditLog.push(result.audit);
   }
-  onProgress("validate_emails", "Finalizing", current.length, totalRows);
+  onProgress(steps[steps.length - 1].name, "Finalizing", totalRows, totalRows);
 
   return { cleanedData: current, auditLog };
 }

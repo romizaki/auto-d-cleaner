@@ -23,7 +23,8 @@ export function validateEmails(
     };
   }
 
-  let invalidCount = 0;
+  let totalInvalid = 0;
+  const columnInvalidCounts = new Map<string, number>();
 
   const cleaned = rows.map((row) => {
     const newRow = { ...row };
@@ -31,7 +32,8 @@ export function validateEmails(
       const val = (row[col.name] || "").trim();
       if (val.length > 0 && !EMAIL_REGEX.test(val)) {
         newRow[col.name] = "";
-        invalidCount++;
+        totalInvalid++;
+        columnInvalidCounts.set(col.name, (columnInvalidCounts.get(col.name) || 0) + 1);
       }
     }
     return newRow;
@@ -42,13 +44,15 @@ export function validateEmails(
     audit: {
       rule: "validate_emails",
       label: "Validate Emails",
-      description: `Cleared ${invalidCount} invalid email values`,
-      rowsAffected: invalidCount,
+      description: `Cleared ${totalInvalid} invalid email values`,
+      rowsAffected: totalInvalid,
       details:
-        invalidCount > 0
-          ? emailColumns.map(
-              (c) => `Validated ${c.name}: cleared ${invalidCount} invalid entries`
-            )
+        totalInvalid > 0
+          ? emailColumns
+              .filter((c) => (columnInvalidCounts.get(c.name) || 0) > 0)
+              .map(
+                (c) => `Validated ${c.name}: cleared ${columnInvalidCounts.get(c.name)} invalid entries`
+              )
           : [],
     },
   };

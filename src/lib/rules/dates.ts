@@ -29,7 +29,7 @@ function normalizeDate(val: string): string {
       let year = parseInt(match[fmt.yearIndex], 10);
       const month = parseInt(match[fmt.monthIndex], 10);
       const day = parseInt(match[fmt.dayIndex], 10);
-      if (fmt.twoDigitYear) year += 2000;
+      if (fmt.twoDigitYear) year += year <= 68 ? 2000 : 1900;
       if (isValidDate(year, month, day)) {
         return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
       }

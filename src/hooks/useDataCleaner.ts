@@ -137,11 +137,12 @@ export function useDataCleaner() {
     ].join("\n");
 
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
+    link.href = url;
     link.download = filename;
     link.click();
-    URL.revokeObjectURL(link.href);
+    setTimeout(() => URL.revokeObjectURL(url), 100);
   }
 
   function exportAuditReport() {
@@ -164,11 +165,12 @@ export function useDataCleaner() {
     ].join("\n");
 
     const blob = new Blob([report], { type: "text/plain;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
+    link.href = url;
     link.download = `${state.fileName.replace(".csv", "")}-audit-report.txt`;
     link.click();
-    URL.revokeObjectURL(link.href);
+    setTimeout(() => URL.revokeObjectURL(url), 100);
   }
 
   return {
