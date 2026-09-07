@@ -58,17 +58,17 @@ A frictionless three-step workflow that delivers immediate time-to-value:
       │      (completeness · duplicates · format consistency)
       │
       └── ┌─── LOCAL RULE ENGINE ─────────────────────────────┐
-           │                                                 │
-           │   1. Trim Whitespace                            │
-           │   2. Remove Empty Rows                          │
-           │   3. Remove Duplicates (exact + fuzzy)          │
-           │   4. Standardize Phones   → E.164 format        │
-           │   5. Standardize Dates    → ISO 8601 (YYYY-MM-DD)│
-           │   6. Fix Capitalization   → title case / lower  │
-           │   7. Standardize Addresses → full street names  │
-           │   8. Validate Emails      → RFC 5322 pattern    │
-           │                                                 │
-           └─────────────────────────────────────────────────┘
+          │                                                   │
+          │   1. Trim Whitespace                              │
+          │   2. Remove Empty Rows                            │
+          │   3. Remove Duplicates (exact + fuzzy)            | 
+          │   4. Standardize Phones   → E.164 format          │
+          │   5. Standardize Dates    → ISO 8601 (YYYY-MM-DD) │
+          │   6. Fix Capitalization   → title case / lower    │
+          │   7. Standardize Addresses → full street names    │
+          │   8. Validate Emails      → RFC 5322 pattern      │
+          │                                                   │
+      ┌───└───────────────────────────────────────────────────┘
       │
       ▼
 🪄 Before / After Split View
@@ -108,15 +108,15 @@ A frictionless three-step workflow that delivers immediate time-to-value:
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
-│                                                               │
+│                                                                │
 │                     Data Privacy Promise                       │
-│                                                               │
+│                                                                │
 │   ✓  CSV parsed entirely in browser memory                    │
 │   ✓  Cleaning runs in an in-browser Web Worker                │
 │   ✓  No data ever leaves the browser                          │
 │   ✓  No API keys required · works fully offline               │
 │   ✓  Nothing is stored, logged, or transmitted                │
-│                                                               │
+│                                                                │
 └────────────────────────────────────────────────────────────────┘
 ```
 
