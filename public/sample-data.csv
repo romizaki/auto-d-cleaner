@@ -1,0 +1,12 @@
+name,phone,email,date,city,address
+John Smith,+1-555-123-4567,john@example.com,01/15/2024,New York,123 Main St
+Jane Doe,(555) 987-6543,JANE@EXAMPLE.COM,2024-01-20,los angeles,456 oak ave
+John Smith,+1-555-123-4567,john@example.com,01/15/2024,New York,123 Main St
+bob johnson,555.222.3333,bob@gmail.com,15-02-2024,CHICAGO,789 pine blvd
+  Alice Williams  ,+1 555 444 5555,alice@yahoo.com,2024/03/01,seattle,321 elm st
+Charlie Brown,+1-555-666-7777,charlie@,2024-02-30,houston,654 maple dr
+Diana Prince,+44 20 7946 0958,diana.prince@mail.co.uk,03-01-2024,london,10 downing st
+,,,,
+Eve Torres,+1-555-888-9999,eve@test.com,2024-01-01,miami,987 birch ln
+frank castle,555-000-1111,not-an-email,2024-13-45,NEW YORK,421 Cedar Ct
+Grace Hopper,+1-555-234-5678,grace@navy.mil,2024/04/15,washington dc,888 cherry way
