@@ -1,4 +1,4 @@
-import { CSVRow, AuditEntry } from "@/types";
+import { CSVRow } from "@/types";
 
 function bandedLevenshtein(a: string, b: string, maxDist: number): number {
   const m = a.length;
@@ -50,75 +50,48 @@ function similarity(a: string, b: string, threshold: number): boolean {
   return dist <= maxDist;
 }
 
-export function removeDuplicates(rows: CSVRow[]): {
+export function exactDedupeRows(rows: CSVRow[]): {
   cleaned: CSVRow[];
-  audit: AuditEntry;
+  removedCount: number;
 } {
-  const seen = new Map<string, number>();
-  const exactRemoved: CSVRow[] = [];
-  const exactIndices = new Set<number>();
-
-  for (let i = 0; i < rows.length; i++) {
-    const key = JSON.stringify(rows[i]);
-    if (seen.has(key)) {
-      exactRemoved.push(rows[i]);
-      exactIndices.add(i);
-    } else {
-      seen.set(key, i);
+  const seen = new Set<string>();
+  const cleaned: CSVRow[] = [];
+  for (const row of rows) {
+    const key = JSON.stringify(row);
+    if (!seen.has(key)) {
+      seen.add(key);
+      cleaned.push(row);
     }
   }
+  return { cleaned, removedCount: rows.length - cleaned.length };
+}
 
-  const remaining = rows.filter((_, i) => !exactIndices.has(i));
-  const fuzzyRemoved: CSVRow[] = [];
+export function runFuzzyDedup(rows: CSVRow[]): {
+  cleaned: CSVRow[];
+  removedCount: number;
+} {
+  const threshold = rows.length > 5000 ? 0.9 : 0.85;
   const fuzzyIndices = new Set<number>();
+  const removed: CSVRow[] = [];
 
-  const threshold = remaining.length > 5000 ? 0.9 : 0.85;
+  const rowStrCache = new Array<string>(rows.length);
+  for (let i = 0; i < rows.length; i++) {
+    rowStrCache[i] = JSON.stringify(rows[i]).toLowerCase();
+  }
 
-  const MAX_FUZZY_ROWS = 10000;
-  const doFuzzy = remaining.length <= MAX_FUZZY_ROWS;
-
-  if (doFuzzy) {
-    const rowStrCache = new Array<string>(remaining.length);
-    for (let i = 0; i < remaining.length; i++) {
-      rowStrCache[i] = JSON.stringify(remaining[i]).toLowerCase();
-    }
-
-    for (let i = 0; i < remaining.length; i++) {
-      if (fuzzyIndices.has(i)) continue;
-      const rowStr = rowStrCache[i];
-      for (let j = i + 1; j < remaining.length; j++) {
-        if (fuzzyIndices.has(j)) continue;
-        const compStr = rowStrCache[j];
-        if (similarity(rowStr, compStr, threshold)) {
-          fuzzyRemoved.push(remaining[j]);
-          fuzzyIndices.add(j);
-        }
+  for (let i = 0; i < rows.length; i++) {
+    if (fuzzyIndices.has(i)) continue;
+    const rowStr = rowStrCache[i];
+    for (let j = i + 1; j < rows.length; j++) {
+      if (fuzzyIndices.has(j)) continue;
+      const compStr = rowStrCache[j];
+      if (similarity(rowStr, compStr, threshold)) {
+        removed.push(rows[j]);
+        fuzzyIndices.add(j);
       }
     }
   }
 
-  const cleaned = remaining.filter((_, i) => !fuzzyIndices.has(i));
-  const totalRemoved = exactRemoved.length + fuzzyRemoved.length;
-
-  const detailLines = [`${exactRemoved.length} exact duplicates removed`];
-  if (doFuzzy) {
-    detailLines.push(
-      `${fuzzyRemoved.length} near-duplicates removed (similarity > ${(threshold * 100).toFixed(0)}%)`
-    );
-  } else {
-    detailLines.push(
-      `Fuzzy dedup skipped for ${remaining.length} rows (over ${MAX_FUZZY_ROWS.toLocaleString()} rows, exact-only)`
-    );
-  }
-
-  return {
-    cleaned,
-    audit: {
-      rule: "remove_duplicates",
-      label: "Removed Duplicates",
-      description: `Removed ${exactRemoved.length} exact and ${fuzzyRemoved.length} fuzzy duplicate rows`,
-      rowsAffected: totalRemoved,
-      details: detailLines,
-    },
-  };
+  const cleaned = rows.filter((_, i) => !fuzzyIndices.has(i));
+  return { cleaned, removedCount: removed.length };
 }

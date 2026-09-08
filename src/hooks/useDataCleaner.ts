@@ -4,6 +4,25 @@ import { useEffect, useRef, useCallback } from "react";
 import { useCleaner } from "@/context/CleanerContext";
 import { WorkerRequest, WorkerResponse } from "@/lib/worker/messages";
 
+function triggerDownload(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+}
+
 export function useDataCleaner() {
   const { state, dispatch } = useCleaner();
   const workerRef = useRef<Worker | null>(null);
@@ -19,10 +38,11 @@ export function useDataCleaner() {
     worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
       const msg = e.data;
       if (msg.type === "PARSE_RESULT") {
-        dispatch({ type: "SET_RAW_DATA", payload: msg.rows });
+        dispatch({ type: "SET_ROW_COUNT", payload: msg.rowCount });
         dispatch({ type: "SET_COLUMNS", payload: msg.columns });
         dispatch({ type: "SET_HEALTH_SCORE", payload: msg.healthScore });
         dispatch({ type: "SET_WARNINGS", payload: msg.warnings });
+        dispatch({ type: "SET_PREVIEW", payload: msg.preview });
         dispatch({ type: "SET_STAGE", payload: "ready" });
       } else if (msg.type === "CLEAN_PROGRESS") {
         dispatch({
@@ -35,10 +55,13 @@ export function useDataCleaner() {
           },
         });
       } else if (msg.type === "CLEAN_RESULT") {
-        dispatch({ type: "SET_CLEANED_DATA", payload: msg.cleanedData });
+        dispatch({ type: "SET_CLEANED_ROW_COUNT", payload: msg.cleanedRowCount });
         dispatch({ type: "SET_AUDIT_LOG", payload: msg.auditLog });
+        dispatch({ type: "SET_CLEANED_PREVIEW", payload: msg.cleanedPreview });
         dispatch({ type: "SET_PROGRESS", payload: null });
         dispatch({ type: "SET_STAGE", payload: "done" });
+      } else if (msg.type === "EXPORT_CSV_RESULT") {
+        triggerDownload(msg.blob, msg.fileName);
       } else if (msg.type === "WORKER_ERROR") {
         dispatch({ type: "SET_ERROR", payload: msg.message });
       }
@@ -66,14 +89,12 @@ export function useDataCleaner() {
     try {
       dispatch({ type: "SET_STAGE", payload: "uploaded" });
       dispatch({ type: "SET_FILE_NAME", payload: file.name });
+      dispatch({ type: "SET_FILE_SIZE", payload: file.size });
       dispatch({ type: "SET_ERROR", payload: "" });
       dispatch({ type: "SET_WARNINGS", payload: [] });
 
       dispatch({ type: "SET_STAGE", payload: "analyzing" });
-      const csvText = await file.text();
-
-      const request: WorkerRequest = { type: "PARSE", csvText };
-      getWorker().postMessage(request);
+      getWorker().postMessage({ type: "PARSE", file } satisfies WorkerRequest);
     } catch (err) {
       dispatch({ type: "SET_ERROR", payload: `Failed to read CSV: ${err}` });
     }
@@ -88,26 +109,21 @@ export function useDataCleaner() {
 
       dispatch({ type: "SET_STAGE", payload: "analyzing" });
       const response = await fetch("/sample-data.csv");
-      const csvText = await response.text();
-
-      const request: WorkerRequest = { type: "PARSE", csvText };
-      getWorker().postMessage(request);
+      const blob = await response.blob();
+      const file = new File([blob], "sample-data.csv", { type: "text/csv" });
+      dispatch({ type: "SET_FILE_SIZE", payload: file.size });
+      getWorker().postMessage({ type: "PARSE", file } satisfies WorkerRequest);
     } catch (err) {
       dispatch({ type: "SET_ERROR", payload: `Failed to load sample data: ${err}` });
     }
   }
 
   function cleanData() {
-    if (state.rawData.length === 0) return;
+    if (state.rowCount === 0) return;
     dispatch({ type: "SET_STAGE", payload: "cleaning" });
     dispatch({ type: "SET_PROGRESS", payload: null });
 
-    const request: WorkerRequest = {
-      type: "CLEAN",
-      data: state.rawData,
-      columns: state.columns,
-    };
-    getWorker().postMessage(request);
+    getWorker().postMessage({ type: "CLEAN" } satisfies WorkerRequest);
   }
 
   function reset() {
@@ -116,33 +132,8 @@ export function useDataCleaner() {
     dispatch({ type: "RESET" });
   }
 
-  function exportCSV(data: Record<string, string>[], filename: string) {
-    if (data.length === 0) return;
-    const headers = Object.keys(data[0]);
-    const csvContent = [
-      headers.join(","),
-      ...data.map((row) =>
-        headers
-          .map((h) => {
-            const val = row[h] || "";
-            return val.includes(",") ||
-              val.includes('"') ||
-              val.includes("\n") ||
-              val.includes("\r")
-              ? `"${val.replace(/"/g, '""')}"`
-              : val;
-          })
-          .join(",")
-      ),
-    ].join("\n");
-
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = filename;
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 100);
+  function exportCSV() {
+    getWorker().postMessage({ type: "EXPORT_CSV" } satisfies WorkerRequest);
   }
 
   function exportAuditReport() {
@@ -159,18 +150,13 @@ export function useDataCleaner() {
       ),
       "",
       `=== Summary ===`,
-      `Starting rows: ${state.rawData.length}`,
-      `Final rows: ${state.cleanedData.length}`,
-      `Rows removed: ${state.rawData.length - state.cleanedData.length}`,
+      `Starting rows: ${state.rowCount}`,
+      `Final rows: ${state.cleanedRowCount}`,
+      `Rows removed: ${state.rowCount - state.cleanedRowCount}`,
     ].join("\n");
 
     const blob = new Blob([report], { type: "text/plain;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${state.fileName.replace(".csv", "")}-audit-report.txt`;
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 100);
+    triggerDownload(blob, `${state.fileName.replace(".csv", "")}-audit-report.txt`);
   }
 
   return {
@@ -181,5 +167,6 @@ export function useDataCleaner() {
     reset,
     exportCSV,
     exportAuditReport,
+    formatBytes,
   };
 }

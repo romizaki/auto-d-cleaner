@@ -22,6 +22,7 @@ function CleanerApp() {
     reset,
     exportCSV,
     exportAuditReport,
+    formatBytes,
   } = useDataCleaner();
 
   const isProcessing = state.stage === "analyzing" || state.stage === "cleaning";
@@ -53,7 +54,7 @@ function CleanerApp() {
         {isProcessing && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm">
             <div className="w-full max-w-xl px-6">
-              <CleaningProgress progress={state.progress} totalRows={state.rawData.length} />
+              <CleaningProgress progress={state.progress} totalRows={state.rowCount} />
             </div>
           </div>
         )}
@@ -117,7 +118,9 @@ function CleanerApp() {
                 <p className="text-sm text-slate-400 mt-1">
                   <span className="font-mono text-emerald-400">{state.fileName}</span>
                   {" "}&middot;{" "}
-                  {state.rawData.length} rows &middot;{" "}
+                  {formatBytes(state.fileSize)}
+                  {" "}&middot;{" "}
+                  {state.rowCount} rows &middot;{" "}
                   {state.columns.length} columns
                 </p>
               </div>
@@ -147,7 +150,7 @@ function CleanerApp() {
             )}
 
             <div className="grid grid-cols-1 gap-4">
-              <DataTable data={state.rawData} title="Preview (Raw Data)" maxHeight="300px" />
+              <DataTable data={state.preview} title="Preview (Raw Data)" maxHeight="300px" />
             </div>
 
             <div className="rounded-xl bg-slate-800/30 border border-slate-700/30 p-4">
@@ -178,7 +181,7 @@ function CleanerApp() {
 
         {state.stage === "cleaning" && (
           <div className="space-y-6">
-            <CleaningProgress progress={state.progress} totalRows={state.rawData.length} />
+            <CleaningProgress progress={state.progress} totalRows={state.rowCount} />
           </div>
         )}
 
@@ -192,9 +195,9 @@ function CleanerApp() {
                     Data Cleaned Successfully
                   </h2>
                   <p className="text-sm text-slate-400 mt-1">
-                    {state.rawData.length} rows → {state.cleanedData.length} rows
+                    {state.rowCount} rows → {state.cleanedRowCount} rows
                     {" "}&middot;{" "}
-                    {state.rawData.length - state.cleanedData.length} rows removed
+                    {state.rowCount - state.cleanedRowCount} rows removed
                   </p>
                 </div>
               </div>
@@ -208,16 +211,14 @@ function CleanerApp() {
             </div>
 
             <BeforeAfterSplit
-              rawData={state.rawData}
-              cleanedData={state.cleanedData}
+              rawData={state.preview}
+              cleanedData={state.cleanedPreview}
             />
 
             <AuditReport auditLog={state.auditLog} />
 
             <ExportButton
-              onExportCSV={() =>
-                exportCSV(state.cleanedData, `cleaned-${state.fileName}`)
-              }
+              onExportCSV={exportCSV}
               onExportAudit={exportAuditReport}
               disabled={isProcessing}
             />

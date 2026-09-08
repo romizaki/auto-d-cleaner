@@ -32,6 +32,7 @@ A frictionless three-step workflow that delivers immediate time-to-value:
 ## Features
 
 - **Drag & Drop Upload** — Drop any CSV file to instantly detect schemas and flag issues
+- **100MB+ Ready** — Files are parsed in a streaming Web Worker; the main thread never holds the full dataset
 - **Data Health Score** — See at-a-glance how clean your data is (empty cells, duplicates, format issues)
 - **One-Click Clean** — 8 built-in local rules, run off the main thread in a Web Worker
 - **Before/After Split View** — Side-by-side comparison of raw vs cleaned data
@@ -87,20 +88,24 @@ A frictionless three-step workflow that delivers immediate time-to-value:
 │                                                              │
 │  🗂  Main Thread                                             │
 │     · UI rendering (React)                                   │
-│     · File read + worker messaging                           │
+│     · Streams the File to the worker (no full-text clone)    │
+│     · Renders counts, health, audit log & preview windows    │
 │                                                              │
 │  🧵  Web Worker                                              │
-│     · PapaParse CSV parsing (off main thread)                │
-│     · Column type detection                                   │
-│     · Health score calculation                                │
-│     · 8 local cleaning rules (banded ~optimized dedup)        │
-│     · Posts progress events back to the UI                    │
+│     · PapaParse streaming CSV parsing (off main thread)      │
+│     · Column type detection (sample-based)                   │
+│     · Health score calculated inline during the stream       │
+│     · Single-pass clean (trim → empty → dup → transform)     │
+│     · Cleaned rows stored in the worker only (not main)      │
+│     · Streaming CSV export → Blob download                   │
+│     · Posts progress events back to the UI                   │
 │                                                              │
-│  🖥  React UI + State (zero persistence)                      │
+│  🖥  React UI + State (counts + previews only, zero full-    │
+│      dataset copies on the main thread)                      │
 └──────────────────────────────────────────────────────────────┘
 ```
 
-**Key design principles:** SOLID separation of concerns — a client-side parser, an extensible local rule engine, and a dedicated Web Worker that keeps all heavy computation off the main thread so the UI never freezes, even on large CSVs. No external services or API keys are required.
+**Key design principles:** SOLID separation of concerns — a dedicated Web Worker streams the CSV through PapaParse, computes schema + health score inline, and runs a single-pass local rule engine that keeps cleaned rows inside the worker. The main thread never holds the full dataset, so even 100MB+ files are processed without OOM freezes. Only counts, schema, small preview windows, and the audit log cross the worker boundary. No external services or API keys are required.
 
 ---
 
@@ -193,11 +198,11 @@ auto-d-cleaner/
 │   ├── hooks/
 │   │   └── useDataCleaner.ts           # Worker messaging + orchestration
 │   ├── lib/
-│   │   ├── health-score.ts             # Data health scoring
+│   │   ├── detect-type.ts             # Column type detection (sample-based)
 │   │   ├── worker/
-│   │   │   ├── cleaner.worker.ts       # Web Worker: parse + clean pipeline
+│   │   │   ├── cleaner.worker.ts       # Web Worker: streaming parse + clean pipeline
 │   │   │   └── messages.ts             # Main ↔ worker message protocol
-│   │   └── rules/                      # 8 cleaning rule modules
+│   │   └── rules/                      # 8 cleaning rule modules (row-level)
 │   │       ├── duplicates.ts           # Exact + banded fuzzy dedup
 │   │       ├── phones.ts               # E.164 standardization
 │   │       ├── dates.ts                # ISO 8601 standardization

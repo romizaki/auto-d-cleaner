@@ -2,13 +2,34 @@ import { CSVRow, AuditEntry, ColumnSchema } from "@/types";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+function findEmailColumns(columns: ColumnSchema[]): ColumnSchema[] {
+  return columns.filter(
+    (c) => c.type === "email" || c.name.toLowerCase().includes("email")
+  );
+}
+
+export function validateRowEmails(
+  row: CSVRow,
+  columns: ColumnSchema[]
+): CSVRow {
+  const emailColumns = findEmailColumns(columns);
+  if (emailColumns.length === 0) return row;
+
+  const newRow = { ...row };
+  for (const col of emailColumns) {
+    const val = (row[col.name] || "").trim();
+    if (val.length > 0 && !EMAIL_REGEX.test(val)) {
+      newRow[col.name] = "";
+    }
+  }
+  return newRow;
+}
+
 export function validateEmails(
   rows: CSVRow[],
   columns: ColumnSchema[]
 ): { cleaned: CSVRow[]; audit: AuditEntry } {
-  const emailColumns = columns.filter(
-    (c) => c.type === "email" || c.name.toLowerCase().includes("email")
-  );
+  const emailColumns = findEmailColumns(columns);
 
   if (emailColumns.length === 0) {
     return {
