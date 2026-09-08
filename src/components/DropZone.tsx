@@ -2,8 +2,7 @@
 
 import { useCallback, useState } from "react";
 
-const MAX_FILE_SIZE_MB = 50;
-const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+const WARN_LARGE_MB = 100;
 
 interface DropZoneProps {
   onFile: (file: File) => void;
@@ -20,9 +19,10 @@ export function DropZone({ onFile, disabled }: DropZoneProps) {
       setError("Please select a .csv file");
       return;
     }
-    if (file.size > MAX_FILE_SIZE_BYTES) {
-      setError(`File is too large. Maximum size is ${MAX_FILE_SIZE_MB}MB.`);
-      return;
+    if (file.size > WARN_LARGE_MB * 1024 * 1024) {
+      setError(
+        `Large file (${(file.size / (1024 * 1024)).toFixed(1)} MB). Processing may take a while and use significant memory.`
+      );
     }
     onFile(file);
   }, [onFile]);
@@ -131,7 +131,7 @@ export function DropZone({ onFile, disabled }: DropZoneProps) {
         </div>
 
         <p className="text-xs text-slate-500">
-          Supports CSV files up to 50MB
+          Supports CSV files of any size (streaming, in-memory processing)
         </p>
 
         {error && (

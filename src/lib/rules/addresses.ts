@@ -13,6 +13,13 @@ const ABBREVIATIONS: Record<string, string> = {
   cir: "Circle",
 };
 
+const ABBREVIATION_REGEXES: { regex: RegExp; full: string }[] = Object.entries(
+  ABBREVIATIONS
+).map(([abbr, full]) => ({
+  regex: new RegExp(`\\b${abbr}\\b`, "gi"),
+  full,
+}));
+
 function titleCase(str: string): string {
   return str
     .toLowerCase()
@@ -21,23 +28,43 @@ function titleCase(str: string): string {
 
 function standardizeAddress(val: string): string {
   let result = titleCase(val);
-  for (const [abbr, full] of Object.entries(ABBREVIATIONS)) {
-    const regex = new RegExp(`\\b${abbr}\\b`, "gi");
+  for (const { regex, full } of ABBREVIATION_REGEXES) {
     result = result.replace(regex, full);
   }
   return result;
+}
+
+function findAddressColumns(columns: ColumnSchema[]): ColumnSchema[] {
+  return columns.filter(
+    (c) =>
+      c.name.toLowerCase().includes("address") ||
+      c.name.toLowerCase().includes("city") ||
+      c.name.toLowerCase().includes("street")
+  );
+}
+
+export function standardizeRowAddresses(
+  row: CSVRow,
+  columns: ColumnSchema[]
+): CSVRow {
+  const addressColumns = findAddressColumns(columns);
+  if (addressColumns.length === 0) return row;
+
+  const newRow = { ...row };
+  for (const col of addressColumns) {
+    const val = (newRow[col.name] || "").trim();
+    if (val.length > 0) {
+      newRow[col.name] = standardizeAddress(val);
+    }
+  }
+  return newRow;
 }
 
 export function standardizeAddresses(
   rows: CSVRow[],
   columns: ColumnSchema[]
 ): { cleaned: CSVRow[]; audit: AuditEntry } {
-  const addressColumns = columns.filter(
-    (c) =>
-      c.name.toLowerCase().includes("address") ||
-      c.name.toLowerCase().includes("city") ||
-      c.name.toLowerCase().includes("street")
-  );
+  const addressColumns = findAddressColumns(columns);
 
   if (addressColumns.length === 0) {
     return {

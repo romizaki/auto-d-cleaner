@@ -63,15 +63,20 @@ export interface CleanProgress {
   totalRows: number;
 }
 
+export const PREVIEW_ROWS = 100;
+
 export interface CleanerState {
   stage: AppStage;
   fileName: string;
-  rawData: CSVRow[];
-  cleanedData: CSVRow[];
+  fileSize: number;
+  rowCount: number;
+  cleanedRowCount: number;
   columns: ColumnSchema[];
   healthScore: HealthScore | null;
   auditLog: AuditEntry[];
   progress: CleanProgress | null;
   error: string | null;
   warnings: string[];
+  preview: CSVRow[];
+  cleanedPreview: CSVRow[];
 }

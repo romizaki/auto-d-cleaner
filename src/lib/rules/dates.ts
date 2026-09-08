@@ -26,9 +26,9 @@ function normalizeDate(val: string): string {
   for (const fmt of DATE_FORMATS) {
     const match = trimmed.match(fmt.regex);
     if (match) {
-      let year = parseInt(match[fmt.yearIndex], 10);
-      const month = parseInt(match[fmt.monthIndex], 10);
-      const day = parseInt(match[fmt.dayIndex], 10);
+      let year = parseInt(match[fmt.yearIndex + 1], 10);
+      const month = parseInt(match[fmt.monthIndex + 1], 10);
+      const day = parseInt(match[fmt.dayIndex + 1], 10);
       if (fmt.twoDigitYear) year += year <= 68 ? 2000 : 1900;
       if (isValidDate(year, month, day)) {
         return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
@@ -38,13 +38,34 @@ function normalizeDate(val: string): string {
   return trimmed;
 }
 
+function findDateColumns(columns: ColumnSchema[]): ColumnSchema[] {
+  return columns.filter(
+    (c) => c.type === "date" || c.name.toLowerCase().includes("date")
+  );
+}
+
+export function standardizeRowDates(
+  row: CSVRow,
+  columns: ColumnSchema[]
+): CSVRow {
+  const dateColumns = findDateColumns(columns);
+  if (dateColumns.length === 0) return row;
+
+  const newRow = { ...row };
+  for (const col of dateColumns) {
+    const val = (newRow[col.name] || "").trim();
+    if (val.length > 0) {
+      newRow[col.name] = normalizeDate(val);
+    }
+  }
+  return newRow;
+}
+
 export function standardizeDates(
   rows: CSVRow[],
   columns: ColumnSchema[]
 ): { cleaned: CSVRow[]; audit: AuditEntry } {
-  const dateColumns = columns.filter(
-    (c) => c.type === "date" || c.name.toLowerCase().includes("date")
-  );
+  const dateColumns = findDateColumns(columns);
 
   if (dateColumns.length === 0) {
     return {

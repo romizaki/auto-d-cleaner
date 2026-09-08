@@ -1,5 +1,13 @@
 import { CSVRow, AuditEntry } from "@/types";
 
+export function trimRow(row: CSVRow): CSVRow {
+  const newRow: CSVRow = {};
+  for (const [key, value] of Object.entries(row)) {
+    newRow[key] = (value || "").trim();
+  }
+  return newRow;
+}
+
 export function trimWhitespace(rows: CSVRow[]): {
   cleaned: CSVRow[];
   audit: AuditEntry;

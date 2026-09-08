@@ -1,16 +1,18 @@
 import { CSVRow, ColumnSchema, HealthScore, AuditEntry, RuleName } from "@/types";
 
 export type WorkerRequest =
-  | { type: "PARSE"; csvText: string }
-  | { type: "CLEAN"; data: CSVRow[]; columns: ColumnSchema[] };
+  | { type: "PARSE"; file: File }
+  | { type: "CLEAN" }
+  | { type: "EXPORT_CSV" };
 
 export type WorkerResponse =
   | {
       type: "PARSE_RESULT";
-      rows: CSVRow[];
+      rowCount: number;
       columns: ColumnSchema[];
       healthScore: HealthScore;
       warnings: string[];
+      preview: CSVRow[];
     }
   | {
       type: "CLEAN_PROGRESS";
@@ -21,8 +23,9 @@ export type WorkerResponse =
     }
   | {
       type: "CLEAN_RESULT";
-      cleanedData: CSVRow[];
+      cleanedRowCount: number;
       auditLog: AuditEntry[];
-      aiUsed?: boolean;
+      cleanedPreview: CSVRow[];
     }
+  | { type: "EXPORT_CSV_RESULT"; blob: Blob; fileName: string }
   | { type: "WORKER_ERROR"; message: string };
