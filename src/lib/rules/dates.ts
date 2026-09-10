@@ -21,17 +21,32 @@ function isValidDate(year: number, month: number, day: number): boolean {
   return true;
 }
 
+function expandYear(year: number, twoDigit: boolean): number {
+  return twoDigit ? (year <= 68 ? 2000 + year : 1900 + year) : year;
+}
+
 function normalizeDate(val: string): string {
   const trimmed = val.trim();
   for (const fmt of DATE_FORMATS) {
     const match = trimmed.match(fmt.regex);
     if (match) {
-      let year = parseInt(match[fmt.yearIndex + 1], 10);
-      const month = parseInt(match[fmt.monthIndex + 1], 10);
-      const day = parseInt(match[fmt.dayIndex + 1], 10);
-      if (fmt.twoDigitYear) year += year <= 68 ? 2000 : 1900;
+      let month = parseInt(match[fmt.monthIndex + 1], 10);
+      let day = parseInt(match[fmt.dayIndex + 1], 10);
+      const year = expandYear(parseInt(match[fmt.yearIndex + 1], 10), fmt.twoDigitYear);
+
+      const isAmbiguousStart = fmt.yearIndex !== 0;
+
       if (isValidDate(year, month, day)) {
         return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      }
+
+      if (isAmbiguousStart && month > 12 && day <= 12) {
+        const tmp = month;
+        month = day;
+        day = tmp;
+        if (isValidDate(year, month, day)) {
+          return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+        }
       }
     }
   }

@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { CleanProgress } from "@/types";
 
 interface CleaningProgressProps {
@@ -12,29 +11,13 @@ export function CleaningProgress({
   progress,
   totalRows,
 }: CleaningProgressProps) {
-  const [dummyProgress, setDummyProgress] = useState(0);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setDummyProgress((current) => {
-        if (current >= 15) {
-          return current;
-        }
-        return current + 1;
-      });
-    }, 4000);
-
-    return () => clearInterval(interval);
-  }, []);
-
   const label = progress?.label ?? "Processing your data...";
   const rowsProcessed = progress?.rowsProcessed ?? 0;
 
-  const realPercent =
-    totalRows > 0 ? Math.round((rowsProcessed / totalRows) * 100) : 0;
-
-  const percent =
-    realPercent > 0 || progress !== null ? Math.max(realPercent, dummyProgress) : dummyProgress;
+  const knownTotal = progress !== null && totalRows > 0 && progress.totalRows > 0;
+  const realPercent = knownTotal
+    ? Math.round((progress.rowsProcessed / progress.totalRows) * 100)
+    : null;
 
   return (
     <div className="w-full max-w-xl mx-auto space-y-5 animate-fade-in">
@@ -53,25 +36,31 @@ export function CleaningProgress({
             {label}
           </p>
 
-          {totalRows > 0 && (
-            <p className="text-xs text-slate-500 mt-1 font-mono">
-              {rowsProcessed.toLocaleString()} /{" "}
-              {totalRows.toLocaleString()} rows
-            </p>
-          )}
+          <p className="text-xs text-slate-500 mt-1 font-mono">
+            {realPercent !== null &&
+              `${rowsProcessed.toLocaleString()} / ${progress!.totalRows.toLocaleString()} rows`}
+          </p>
         </div>
       </div>
 
       <div className="space-y-2">
         <div className="h-2 rounded-full bg-slate-800 overflow-hidden">
-          <div
-            className="h-full rounded-full bg-emerald-500 transition-all duration-300"
-            style={{ width: `${Math.min(100, percent)}%` }}
-          />
+          {realPercent !== null ? (
+            <div
+              className="h-full rounded-full bg-emerald-500 transition-all duration-300"
+              style={{ width: `${Math.min(100, realPercent)}%` }}
+            />
+          ) : (
+            <div className="h-full rounded-full overflow-hidden">
+              <div className="animate-indeterminate h-full w-1/3 rounded-full bg-emerald-500" />
+            </div>
+          )}
         </div>
 
         <div className="flex justify-between text-xs text-slate-500 font-mono">
-          <span>{Math.min(100, percent)}%</span>
+          <span>
+            {realPercent !== null ? `${Math.min(100, realPercent)}%` : "Analyzing..."}
+          </span>
           <span>
             Cleaning... Please don&apos;t close this page
           </span>

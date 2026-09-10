@@ -2,6 +2,7 @@
 
 import { CleanerProvider } from "@/context/CleanerContext";
 import { useDataCleaner } from "@/hooks/useDataCleaner";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { DropZone } from "@/components/DropZone";
 import { DataHealthScore } from "@/components/DataHealthScore";
 import { DataTable } from "@/components/DataTable";
@@ -239,7 +240,9 @@ function CleanerApp() {
 export default function Home() {
   return (
     <CleanerProvider>
-      <CleanerApp />
+      <ErrorBoundary>
+        <CleanerApp />
+      </ErrorBoundary>
     </CleanerProvider>
   );
 }
