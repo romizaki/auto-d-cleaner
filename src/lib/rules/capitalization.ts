@@ -8,55 +8,114 @@ function titleCase(str: string): string {
 
 function isLikelyName(colName: string): boolean {
   const name = colName.toLowerCase();
+  return name.includes("name");
+}
+
+function isAddressOwned(colName: string): boolean {
+  const name = colName.toLowerCase();
   return (
-    name.includes("name") ||
-    name.includes("city") ||
     name.includes("address") ||
-    name.includes("country") ||
-    name.includes("state")
+    name.includes("city") ||
+    name.includes("street")
   );
 }
 
-function applyToRow(row: CSVRow, columns: ColumnSchema[]): CSVRow {
-  const nameColumns = columns.filter(
-    (c) =>
-      (c.type === "string" && isLikelyName(c.name)) ||
-      c.type === "email"
+function isTitleCaseEligibleValue(value: string): boolean {
+  const v = value.trim();
+  if (v.length === 0) return true;
+  if (/\d/.test(v)) return false;
+  if (/^[A-Z]+$/.test(v) && v.length <= 4) return false;
+  return v.split(/\s+/).filter(Boolean).length <= 3;
+}
+
+function columnAllowsTitleCase(col: ColumnSchema): boolean {
+  if (col.type !== "string") return false;
+  if (isAddressOwned(col.name)) return false;
+  return isLikelyName(col.name) || col.applyTitleCase === true;
+}
+
+function getColumnCache(
+  cache: Map<string, Map<string, string>> | undefined,
+  colName: string
+): Map<string, string> {
+  if (!cache) return new Map<string, string>();
+  let colCache = cache.get(colName);
+  if (!colCache) {
+    colCache = new Map<string, string>();
+    cache.set(colName, colCache);
+  }
+  return colCache;
+}
+
+function titleCaseColumnValue(
+  val: string,
+  colCache: Map<string, string>
+): string {
+  let mapped = colCache.get(val);
+  if (mapped === undefined) {
+    mapped = titleCase(val);
+    colCache.set(val, mapped);
+  }
+  return mapped;
+}
+
+function applyToRow(
+  row: CSVRow,
+  columns: ColumnSchema[],
+  cache?: Map<string, Map<string, string>>
+): CSVRow {
+  const titleCaseColumns = columns.filter(columnAllowsTitleCase);
+  const emailColumns = columns.filter(
+    (c) => c.type === "email" || c.name.toLowerCase().includes("email")
   );
-  if (nameColumns.length === 0) return row;
+  if (titleCaseColumns.length === 0 && emailColumns.length === 0) return row;
 
   const newRow = { ...row };
-  for (const col of nameColumns) {
+  for (const col of titleCaseColumns) {
     const val = (newRow[col.name] || "").trim();
     if (val.length === 0) continue;
-
-    if (col.type === "email" || col.name.toLowerCase().includes("email")) {
-      newRow[col.name] = val.toLowerCase();
-    } else {
-      newRow[col.name] = titleCase(val);
-    }
+    newRow[col.name] = titleCaseColumnValue(val, getColumnCache(cache, col.name));
+  }
+  const lowerCaseColumns = emailColumns.filter(
+    (c) => !titleCaseColumns.includes(c)
+  );
+  for (const col of lowerCaseColumns) {
+    const val = (newRow[col.name] || "").trim();
+    if (val.length === 0) continue;
+    newRow[col.name] = val.toLowerCase();
   }
   return newRow;
 }
 
+function assertTitleCaseEligibility(rows: CSVRow[], col: ColumnSchema): boolean {
+  if (col.applyTitleCase !== undefined) return col.applyTitleCase;
+  for (const row of rows) {
+    const val = (row[col.name] || "").trim();
+    if (val.length > 0 && !isTitleCaseEligibleValue(val)) return false;
+  }
+  return true;
+}
+
 export function fixRowCapitalization(
   row: CSVRow,
-  columns: ColumnSchema[]
+  columns: ColumnSchema[],
+  cache?: Map<string, Map<string, string>>
 ): CSVRow {
-  return applyToRow(row, columns);
+  return applyToRow(row, columns, cache);
 }
 
 export function fixCapitalization(
   rows: CSVRow[],
   columns: ColumnSchema[]
 ): { cleaned: CSVRow[]; audit: AuditEntry } {
-  const nameColumns = columns.filter(
-    (c) =>
-      (c.type === "string" && isLikelyName(c.name)) ||
-      c.type === "email"
+  const titleCaseColumns = columns.filter(
+    (c) => columnAllowsTitleCase(c) && assertTitleCaseEligibility(rows, c)
+  );
+  const emailColumns = columns.filter(
+    (c) => c.type === "email" || c.name.toLowerCase().includes("email")
   );
 
-  if (nameColumns.length === 0) {
+  if (titleCaseColumns.length === 0 && emailColumns.length === 0) {
     return {
       cleaned: rows,
       audit: {
@@ -70,21 +129,26 @@ export function fixCapitalization(
   }
 
   let affected = 0;
-  const details: string[] = [];
+  const cache = new Map<string, Map<string, string>>();
 
   const cleaned = rows.map((row) => {
     const newRow = { ...row };
-    for (const col of nameColumns) {
+    for (const col of titleCaseColumns) {
       const val = (newRow[col.name] || "").trim();
       if (val.length === 0) continue;
-
-      let fixed: string;
-      if (col.type === "email" || col.name.toLowerCase().includes("email")) {
-        fixed = val.toLowerCase();
-      } else {
-        fixed = titleCase(val);
+      const fixed = titleCaseColumnValue(val, getColumnCache(cache, col.name));
+      if (fixed !== val) {
+        newRow[col.name] = fixed;
+        affected++;
       }
-
+    }
+    const lowerCaseColumns = emailColumns.filter(
+      (c) => !titleCaseColumns.includes(c)
+    );
+    for (const col of lowerCaseColumns) {
+      const val = (newRow[col.name] || "").trim();
+      if (val.length === 0) continue;
+      const fixed = val.toLowerCase();
       if (fixed !== val) {
         newRow[col.name] = fixed;
         affected++;
@@ -93,23 +157,25 @@ export function fixCapitalization(
     return newRow;
   });
 
-  if (affected > 0) {
-    details.push(
-      ...nameColumns.map((c) => {
-        if (c.type === "email") return `Lowercased ${c.name}`;
-        return `Title-cased ${c.name}`;
-      })
-    );
-  }
+  const affectedCols = [...titleCaseColumns, ...emailColumns];
 
   return {
     cleaned,
     audit: {
       rule: "fix_capitalization",
       label: "Fix Capitalization",
-      description: `Fixed capitalization in ${affected} cells`,
+      description:
+        affected > 0
+          ? `Fixed capitalization in ${affected} cells`
+          : "No capitalization issues found",
       rowsAffected: affected,
-      details,
+      details:
+        affected > 0
+          ? affectedCols.map((c) => {
+              if (c.type === "email") return `Lowercased ${c.name}`;
+              return `Title-cased ${c.name}`;
+            })
+          : [],
     },
   };
 }
