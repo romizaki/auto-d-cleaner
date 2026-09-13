@@ -43,6 +43,7 @@ export function useDataCleaner() {
         dispatch({ type: "SET_HEALTH_SCORE", payload: msg.healthScore });
         dispatch({ type: "SET_WARNINGS", payload: msg.warnings });
         dispatch({ type: "SET_PREVIEW", payload: msg.preview });
+        dispatch({ type: "SET_PROGRESS", payload: null });
         dispatch({ type: "SET_STAGE", payload: "ready" });
       } else if (msg.type === "CLEAN_PROGRESS") {
         dispatch({
@@ -92,6 +93,7 @@ export function useDataCleaner() {
       dispatch({ type: "SET_FILE_SIZE", payload: file.size });
       dispatch({ type: "SET_ERROR", payload: "" });
       dispatch({ type: "SET_WARNINGS", payload: [] });
+      dispatch({ type: "SET_PROGRESS", payload: null });
 
       dispatch({ type: "SET_STAGE", payload: "analyzing" });
       getWorker().postMessage({ type: "PARSE", file } satisfies WorkerRequest);
@@ -106,6 +108,7 @@ export function useDataCleaner() {
       dispatch({ type: "SET_FILE_NAME", payload: "sample-data.csv" });
       dispatch({ type: "SET_ERROR", payload: "" });
       dispatch({ type: "SET_WARNINGS", payload: [] });
+      dispatch({ type: "SET_PROGRESS", payload: null });
 
       dispatch({ type: "SET_STAGE", payload: "analyzing" });
       const response = await fetch("/sample-data.csv");

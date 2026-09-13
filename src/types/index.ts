@@ -6,6 +6,7 @@ export interface ColumnSchema {
   nullCount: number;
   totalCount: number;
   sampleValues: string[];
+  applyTitleCase?: boolean;
 }
 
 export interface CSVRow {
@@ -20,7 +21,8 @@ export type RuleName =
   | "remove_empty_rows"
   | "validate_emails"
   | "trim_whitespace"
-  | "standardize_addresses";
+  | "standardize_addresses"
+  | "uppercase_keywords";
 
 export interface CleaningRule {
   name: RuleName;

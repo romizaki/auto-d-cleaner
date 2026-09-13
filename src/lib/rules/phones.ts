@@ -14,9 +14,9 @@ function formatToE164(phone: string): string {
   if (digits.length > 15) return "";
   if (digits.length === 10) return `+1${digits}`;
   if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
-  if (digits.length >= 7 && digits.length <= 9) return "";
+  if (digits.length >= 7 && digits.length <= 15) return phone.trim();
 
-  return "";
+  return phone.trim();
 }
 
 function findPhoneColumns(columns: ColumnSchema[]): ColumnSchema[] {

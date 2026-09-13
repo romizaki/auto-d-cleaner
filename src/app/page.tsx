@@ -2,6 +2,7 @@
 
 import { CleanerProvider } from "@/context/CleanerContext";
 import { useDataCleaner } from "@/hooks/useDataCleaner";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { DropZone } from "@/components/DropZone";
 import { DataHealthScore } from "@/components/DataHealthScore";
 import { DataTable } from "@/components/DataTable";
@@ -11,6 +12,7 @@ import { CleaningProgress } from "@/components/CleaningProgress";
 import { CheckmarkAnimation } from "@/components/CheckmarkAnimation";
 import { ExportButton } from "@/components/ExportButton";
 import { SampleDataButton } from "@/components/SampleDataButton";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { TrustBadge } from "@/components/TrustBadge";
 
 function CleanerApp() {
@@ -46,8 +48,11 @@ function CleanerApp() {
               </p>
             </div>
           </div>
-          <TrustBadge />
-        </div>
+          <div className="flex items-center gap-3">
+            <TrustBadge />
+            <ThemeToggle />
+          </div>
+          </div>
       </header>
 
       <main className="max-w-6xl mx-auto px-6 py-8">
@@ -239,7 +244,9 @@ function CleanerApp() {
 export default function Home() {
   return (
     <CleanerProvider>
-      <CleanerApp />
+      <ErrorBoundary>
+        <CleanerApp />
+      </ErrorBoundary>
     </CleanerProvider>
   );
 }

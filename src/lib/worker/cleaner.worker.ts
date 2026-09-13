@@ -17,6 +17,7 @@ import { fixRowCapitalization } from "../rules/capitalization";
 import { standardizeRowAddresses } from "../rules/addresses";
 import { validateRowEmails } from "../rules/emails";
 import { runFuzzyDedup } from "../rules/duplicates";
+import { standardizeRowUppercase } from "../rules/uppercase";
 
 const MAX_SAMPLES = 1000;
 const MAX_FUZZY_ROWS = 10000;
@@ -50,13 +51,37 @@ function escapeCSVRow(cells: string[]): string {
     .join(",");
 }
 
+function countChangedCells(before: CSVRow, after: CSVRow): number {
+  let count = 0;
+  const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+  for (const key of keys) {
+    if ((before[key] || "") !== (after[key] || "")) count++;
+  }
+  return count;
+}
+
+function isTitleCaseEligibleValue(value: string): boolean {
+  const v = value.trim();
+  if (v.length === 0) return true;
+  if (/\d/.test(v)) return false;
+  if (/^[A-Z]+$/.test(v) && v.length <= 4) return false;
+  return v.split(/\s+/).filter(Boolean).length <= 3;
+}
+
 function handleParse(file: File) {
   storedFile = file;
   parsedRowCount = 0;
   cleanedRows = [];
   headers = [];
   installedColumns = [];
-  let cols: { name: string; nullCount: number; totalCount: number; samples: string[] }[] = [];
+  let cols: {
+    name: string;
+    nullCount: number;
+    totalCount: number;
+    samples: string[];
+    titleCaseable: boolean;
+    nonEmpty: number;
+  }[] = [];
   const seen = new Set<string>();
   const preview: CSVRow[] = [];
   const acc = { emptyCells: 0, duplicates: 0, totalCells: 0 };
@@ -64,7 +89,7 @@ function handleParse(file: File) {
 
   Papa.parse<CSVRow>(file, {
     header: true,
-    skipEmptyLines: true,
+    skipEmptyLines: "greedy",
     step: (results: Papa.ParseStepResult<CSVRow>) => {
       const row = results.data;
       const fields = results.meta.fields || [];
@@ -75,6 +100,8 @@ function handleParse(file: File) {
           nullCount: 0,
           totalCount: 0,
           samples: [],
+          titleCaseable: true,
+          nonEmpty: 0,
         }));
       }
 
@@ -94,8 +121,14 @@ function handleParse(file: File) {
         stat.totalCount++;
         if (val.trim().length === 0) {
           stat.nullCount++;
-        } else if (stat.samples.length < MAX_SAMPLES) {
-          stat.samples.push(val.trim());
+        } else {
+          if (stat.samples.length < MAX_SAMPLES) {
+            stat.samples.push(val.trim());
+          }
+          stat.nonEmpty++;
+          if (stat.titleCaseable && !isTitleCaseEligibleValue(val)) {
+            stat.titleCaseable = false;
+          }
         }
       }
 
@@ -107,14 +140,21 @@ function handleParse(file: File) {
       let invalidFormats = 0;
       const columns: ColumnSchema[] = cols.map((stat) => {
         const type = detectColumnTypeFromSample(stat.samples);
-        if (type === "email" || type === "date" || type === "phone") {
+        if (
+          type === "email" ||
+          type === "date" ||
+          type === "phone" ||
+          type === "number"
+        ) {
           for (const v of stat.samples) {
             const ok =
               type === "email"
                 ? /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)
                 : type === "date"
                 ? /^\d{4}[-\/]\d{1,2}[-\/]\d{1,2}$|^\d{1,2}[-\/]\d{1,2}[-\/]\d{4}$/.test(v)
-                : /^[\+]?[\d\s\-\(\)\.]{7,20}$/.test(v);
+                : type === "phone"
+                ? /^[\+]?[\d\s\-\(\)\.]{7,20}$/.test(v)
+                : !isNaN(Number(v));
             if (!ok) invalidFormats++;
           }
         }
@@ -124,6 +164,7 @@ function handleParse(file: File) {
           nullCount: stat.nullCount,
           totalCount: stat.totalCount,
           sampleValues: stat.samples.slice(0, 3),
+          applyTitleCase: stat.titleCaseable && stat.nonEmpty > 0,
         };
       });
       installedColumns = columns;
@@ -185,33 +226,71 @@ function handleClean() {
 
   const cleaned: CSVRow[] = [];
   const seen = new Set<string>();
+  const capsCache = new Map<string, Map<string, string>>();
   let removedEmpties = 0;
+  let trimmedCells = 0;
+  let phonesAffected = 0;
+  let datesAffected = 0;
+  let capsAffected = 0;
+  let addrsAffected = 0;
+  let emailsCleared = 0;
+  let uppercaseAffected = 0;
 
   const emitProgress = (rule: RuleName, label: string) =>
     post({ type: "CLEAN_PROGRESS", rule, label, rowsProcessed, totalRows });
 
-  emitProgress("trim_whitespace", "Reading and cleaning rows");
+  const emitPhaseProgress = () => {
+    const ratio = totalRows > 0 ? rowsProcessed / totalRows : 0;
+    if (ratio < 0.34) {
+      emitProgress("trim_whitespace", "Trimming whitespace & removing empty rows");
+    } else if (ratio < 0.67) {
+      emitProgress("standardize_phones", "Standardizing phones & dates");
+    } else {
+      emitProgress("standardize_addresses", "Fixing capitalization, codes & addresses");
+    }
+  };
+
+  emitPhaseProgress();
 
   Papa.parse<CSVRow>(file, {
     header: true,
-    skipEmptyLines: true,
+    skipEmptyLines: "greedy",
     step: (results: Papa.ParseStepResult<CSVRow>) => {
       rowsProcessed++;
       if (rowsProcessed % 5000 === 0) {
-        emitProgress("trim_whitespace", "Reading and cleaning rows");
+        emitPhaseProgress();
       }
 
       let row = trimRow(results.data);
+      trimmedCells += countChangedCells(results.data, row);
       if (isEmptyRow(row)) {
         removedEmpties++;
         return;
       }
 
+      const beforePhones = row;
       row = standardizeRowPhones(row, columns);
+      phonesAffected += countChangedCells(beforePhones, row);
+
+      const beforeDates = row;
       row = standardizeRowDates(row, columns);
-      row = fixRowCapitalization(row, columns);
+      datesAffected += countChangedCells(beforeDates, row);
+
+      const beforeCaps = row;
+      row = fixRowCapitalization(row, columns, capsCache);
+      capsAffected += countChangedCells(beforeCaps, row);
+
+      const beforeUpper = row;
+      row = standardizeRowUppercase(row, columns);
+      uppercaseAffected += countChangedCells(beforeUpper, row);
+
+      const beforeAddrs = row;
       row = standardizeRowAddresses(row, columns);
+      addrsAffected += countChangedCells(beforeAddrs, row);
+
+      const beforeEmails = row;
       row = validateRowEmails(row, columns);
+      emailsCleared += countChangedCells(beforeEmails, row);
 
       const key = JSON.stringify(row);
       if (seen.has(key)) return;
@@ -221,6 +300,9 @@ function handleClean() {
     },
     complete: () => {
       let rows = cleaned;
+
+      rowsProcessed = totalRows;
+      emitPhaseProgress();
 
       const fuzzySkipped = rows.length > MAX_FUZZY_ROWS;
       let fuzzyRemoved = 0;
@@ -238,9 +320,15 @@ function handleClean() {
         {
           rule: "trim_whitespace",
           label: "Trim Whitespace",
-          description: "Trimmed leading/trailing whitespace from all cells",
-          rowsAffected: 0,
-          details: [],
+          description:
+            trimmedCells > 0
+              ? `Trimmed leading/trailing whitespace from ${trimmedCells} cells`
+              : "No cells required whitespace trimming",
+          rowsAffected: trimmedCells,
+          details:
+            trimmedCells > 0
+              ? [`Removed surrounding whitespace in ${trimmedCells} cells`]
+              : [],
         },
         {
           rule: "remove_empty_rows",
@@ -266,37 +354,68 @@ function handleClean() {
         {
           rule: "standardize_phones",
           label: "Standardize Phone Numbers",
-          description: "Normalized detected phone columns to E.164 format",
-          rowsAffected: 0,
-          details: [],
+          description:
+            phonesAffected > 0
+              ? `Normalized ${phonesAffected} phone numbers to E.164 format`
+              : "No phone numbers required normalization",
+          rowsAffected: phonesAffected,
+          details: phonesAffected > 0 ? [`Standardized phone numbers to E.164 format`] : [],
         },
         {
           rule: "standardize_dates",
           label: "Standardize Dates",
-          description: "Normalized detected date columns to ISO 8601 (YYYY-MM-DD)",
-          rowsAffected: 0,
-          details: [],
+          description:
+            datesAffected > 0
+              ? `Normalized ${datesAffected} date values to ISO 8601 (YYYY-MM-DD)`
+              : "No date values required normalization",
+          rowsAffected: datesAffected,
+          details: datesAffected > 0 ? [`Normalized dates to YYYY-MM-DD format`] : [],
         },
         {
           rule: "fix_capitalization",
           label: "Fix Capitalization",
-          description: "Title-cased name columns and lowercased email columns",
-          rowsAffected: 0,
-          details: [],
+          description:
+            capsAffected > 0
+              ? `Fixed capitalization in ${capsAffected} cells`
+              : "No capitalization issues found",
+          rowsAffected: capsAffected,
+          details: capsAffected > 0 ? [`Title-cased name columns and lowercased emails`] : [],
+        },
+        {
+          rule: "uppercase_keywords",
+          label: "Uppercase Code/Status Columns",
+          description:
+            uppercaseAffected > 0
+              ? `Uppercased ${uppercaseAffected} values in status/code columns`
+              : "No status/code columns required uppercasing",
+          rowsAffected: uppercaseAffected,
+          details:
+            uppercaseAffected > 0
+              ? [`Uppercased status, type, code and state/country-style values`]
+              : [],
         },
         {
           rule: "standardize_addresses",
           label: "Standardize Addresses",
-          description: "Normalized address columns (title case + expanded abbreviations)",
-          rowsAffected: 0,
-          details: [],
+          description:
+            addrsAffected > 0
+              ? `Standardized ${addrsAffected} address values (title case + expanded abbreviations)`
+              : "No address values required standardization",
+          rowsAffected: addrsAffected,
+          details: addrsAffected > 0 ? [`Expanded street abbreviations and title-cased addresses`] : [],
         },
         {
           rule: "validate_emails",
           label: "Validate Emails",
-          description: "Cleared invalid email values in detected email columns",
-          rowsAffected: 0,
-          details: [],
+          description:
+            emailsCleared > 0
+              ? `Cleared ${emailsCleared} invalid email values`
+              : "No invalid emails found",
+          rowsAffected: emailsCleared,
+          details:
+            emailsCleared > 0
+              ? [`Cleared ${emailsCleared} values that failed email format validation`]
+              : [],
         },
       ];
 
