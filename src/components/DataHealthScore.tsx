@@ -34,7 +34,7 @@ export function DataHealthScore({ healthScore }: DataHealthScoreProps) {
               cy="50"
               r="45"
               fill="none"
-              stroke="#334155"
+              stroke="var(--color-slate-700)"
               strokeWidth="6"
             />
             <circle
